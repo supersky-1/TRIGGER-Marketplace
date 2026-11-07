@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../lib/api";
@@ -142,6 +142,7 @@ function AdminDashboard() {
   const [sellerMetrics, setSellerMetrics] = useState<SellerBusinessMetrics | null>(null);
   const [sellerMetricsLoading, setSellerMetricsLoading] = useState(false);
   const [sellerMetricsError, setSellerMetricsError] = useState("");
+  const sellerMetricsSectionRef = useRef<HTMLElement>(null);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [pendingSellers, setPendingSellers] = useState<PendingSeller[]>([]);
   const [verificationDocuments, setVerificationDocuments] = useState<VerificationDocumentPreview[] | null>(null);
@@ -238,6 +239,9 @@ function AdminDashboard() {
     setSellerMetrics(null);
     setSellerMetricsError("");
     setSellerMetricsLoading(true);
+    window.requestAnimationFrame(() => {
+      sellerMetricsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     try {
       const response = await api.get(`/api/admin/sellers/${sellerId}/metrics`);
       setSellerMetrics(response.data);
@@ -424,15 +428,15 @@ function AdminDashboard() {
                     type="button"
                     onClick={() => void handleSellerSelect(seller.id)}
                     aria-expanded={selectedSellerId === seller.id}
-                    className={`w-full flex items-center justify-between text-left border-b border-gray-100 pb-3 last:border-b-0 last:pb-0 rounded-lg px-2 py-2 hover:bg-indigo-50 transition ${selectedSellerId === seller.id ? "bg-indigo-50 ring-1 ring-indigo-200" : ""}`}
+                    className={`w-full flex flex-col gap-1 text-left border-b border-gray-100 pb-3 last:border-b-0 last:pb-0 rounded-lg px-3 py-3 hover:bg-indigo-50 transition sm:flex-row sm:items-center sm:justify-between ${selectedSellerId === seller.id ? "bg-indigo-50 ring-1 ring-indigo-200" : ""}`}
                   >
-                    <div>
-                      <p className="font-medium text-gray-800">{seller.businessName || seller.name}</p>
-                      <p className="text-xs text-gray-500">Owner: {seller.name}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-800 break-words">{seller.businessName || seller.name}</p>
+                      <p className="text-xs text-gray-500 break-words">Owner: {seller.name}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       <p className="text-sm font-semibold text-gray-800">{formatMoney(seller.revenue)}</p>
-                      <p className="text-xs text-gray-500">{seller.totalOrders} orders · View metrics</p>
+                      <p className="text-xs text-indigo-700">{seller.totalOrders} orders · Tap to view metrics</p>
                     </div>
                   </button>
                 ))}
@@ -552,7 +556,7 @@ function AdminDashboard() {
         </div>
 
         {selectedSellerId && (
-          <section className="bg-white rounded-xl shadow-sm p-6 mb-10">
+          <section ref={sellerMetricsSectionRef} className="scroll-mt-4 bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-10">
             {sellerMetricsLoading ? (
               <p className="text-gray-500">Loading business metrics...</p>
             ) : sellerMetricsError ? (
