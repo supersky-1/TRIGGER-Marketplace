@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCartStore } from "../store/cartStore";
 import NotificationBell from "./NotificationBell";
@@ -18,63 +18,53 @@ function Navbar() {
   };
 
   const mobileLinkClass = "block rounded-lg px-3 py-3 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700";
+  const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `relative px-1 py-2 text-sm font-medium transition-colors ${isActive ? "text-blue-700 after:absolute after:inset-x-0 after:-bottom-[1.28rem] after:h-0.5 after:rounded-full after:bg-blue-600" : "text-slate-600 hover:text-blue-700"}`;
 
   return (
-    <nav className="bg-white/95 backdrop-blur-md border-b border-gray-100 sticky top-0 z-50">
+    <nav aria-label="Main navigation" className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-[0_2px_12px_rgba(15,23,42,0.03)] backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center min-h-16 gap-2">
           {/* Logo */}
-          <Link to="/" onClick={closeMobileMenu} className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+          <Link to="/" onClick={closeMobileMenu} className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-indigo-600 shadow-sm shadow-blue-900/20">
               <span className="text-white font-bold text-lg">T</span>
             </div>
-            <span className="text-xl font-bold text-gray-900 tracking-tight">
+            <span className="text-xl font-bold tracking-tight text-slate-950">
               TRIGGER
             </span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-7">
-            <Link to="/" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-              Home
-            </Link>
-            <Link to="/marketplace" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-              Shop
-            </Link>
+            <NavLink to="/" end className={desktopLinkClass}>Home</NavLink>
+            <NavLink to="/marketplace" className={desktopLinkClass}>Shop</NavLink>
 
             {user && (
               <>
-                <Link to="/cart" className="relative text-gray-600 hover:text-blue-600 font-medium text-sm">
+                <NavLink to="/cart" className={desktopLinkClass}>
                   Cart
                   {totalItems() > 0 && (
-                    <span className="absolute -top-2 -right-4 bg-blue-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                    <span className="absolute -right-4 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
                       {totalItems()}
                     </span>
                   )}
-                </Link>
-                <Link to="/orders" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-                  My Orders
-                </Link>
-                <Link to="/messages" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-                  Messages
-                </Link>
+                </NavLink>
+                <NavLink to="/orders" className={desktopLinkClass}>My Orders</NavLink>
+                <NavLink to="/messages" className={desktopLinkClass}>Messages</NavLink>
               </>
             )}
 
             {user?.role === "seller" && user.isVerified && (
-              <Link to="/seller/dashboard" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
+              <NavLink to="/seller/dashboard" className={desktopLinkClass}>
                 Dashboard
-              </Link>
+              </NavLink>
             )}
 
             {user?.role === "admin" && (
               <>
-                <Link to="/admin" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-                  Admin
-                </Link>
-                <Link to="/admin/ledger" className="text-gray-600 hover:text-blue-600 font-medium text-sm">
-                  Ledger
-                </Link>
+                <NavLink to="/admin" end className={desktopLinkClass}>Admin</NavLink>
+                <NavLink to="/admin/ledger" className={desktopLinkClass}>Ledger</NavLink>
               </>
             )}
           </div>
