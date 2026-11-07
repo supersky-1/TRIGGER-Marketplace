@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import User from "../models/User";
 import Product from "../models/Product";
 import Order from "../models/Order";
+import Payment from "../models/Payment";
+import Payout from "../models/Payout";
 import AdminAuditLog from "../models/AdminAuditLog";
 import { AuthRequest } from "../middleware/auth";
 
@@ -54,7 +56,7 @@ export const getAllSellers = async (req: AuthRequest, res: Response) => {
     }
 
     const sellers = await User.find({ role: "seller" }).select(
-      "name email createdAt"
+      "name email businessName verificationStatus createdAt"
     );
 
     // Get revenue per seller
@@ -80,6 +82,8 @@ export const getAllSellers = async (req: AuthRequest, res: Response) => {
           id: seller._id,
           name: seller.name,
           email: seller.email,
+          businessName: seller.businessName,
+          verificationStatus: seller.verificationStatus,
           joined: seller.createdAt,
           totalOrders: orders.length,
           revenue,
@@ -92,6 +96,90 @@ export const getAllSellers = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getSellerBusinessMetrics = async (req: AuthRequest, res: Response) => {
+  try {
+    const { sellerId } = req.params;
+    if (!mongoose.isValidObjectId(sellerId)) {
+      return res.status(400).json({ message: "Invalid seller ID" });
+    }
+
+    const seller = await User.findOne({ _id: sellerId, role: "seller" })
+      .select("name email businessName verificationStatus createdAt");
+    if (!seller) return res.status(404).json({ message: "Business not found" });
+
+    const products = await Product.find({ seller: seller._id })
+      .select("name price stock isActive createdAt")
+      .sort({ createdAt: -1 });
+    const productIds = products.map((product) => product._id);
+    const orders = productIds.length
+      ? await Order.find({ "items.product": { $in: productIds } }).select("items status")
+      : [];
+    const paidOrders = orders.filter((order) => ["paid", "shipped", "delivered"].includes(order.status));
+    let grossSalesCents = 0;
+    let unitsSold = 0;
+    const productIdSet = new Set(productIds.map((id) => id.toString()));
+    for (const order of paidOrders) {
+      for (const item of order.items) {
+        if (!productIdSet.has(item.product.toString())) continue;
+        grossSalesCents += Math.round(item.price * 100) * item.quantity;
+        unitsSold += item.quantity;
+      }
+    }
+    const platformFeeCents = Math.round(grossSalesCents * 0.125);
+    const payouts = await Payout.find({ seller: seller._id }).select("status amount grossAmount");
+    const sumPayoutField = (status: string, field: "amount" | "grossAmount") =>
+      payouts.filter((payout) => payout.status === status)
+        .reduce((sum, payout) => sum + Math.round(payout[field] * 100), 0) / 100;
+    const orderStatuses = { pending: 0, paid: 0, shipped: 0, delivered: 0, cancelled: 0 };
+    for (const order of orders) {
+      if (order.status in orderStatuses) orderStatuses[order.status as keyof typeof orderStatuses] += 1;
+    }
+
+    return res.json({
+      business: {
+        name: seller.businessName || seller.name,
+        ownerName: seller.name,
+        ownerEmail: seller.email,
+        verificationStatus: seller.verificationStatus,
+        joined: seller.createdAt,
+      },
+      products: {
+        total: products.length,
+        active: products.filter((product) => product.isActive !== false).length,
+        removed: products.filter((product) => product.isActive === false).length,
+        listings: products.map((product) => ({
+          _id: product._id,
+          name: product.name,
+          price: product.price,
+          stock: product.stock,
+          isActive: product.isActive,
+        })),
+      },
+      sales: {
+        paidOrderCount: paidOrders.length,
+        unitsSold,
+        grossSales: grossSalesCents / 100,
+        platformFee: platformFeeCents / 100,
+        sellerNet: (grossSalesCents - platformFeeCents) / 100,
+        averageOrderValue: paidOrders.length ? Math.round(grossSalesCents / paidOrders.length) / 100 : 0,
+      },
+      orderStatuses,
+      payouts: {
+        pendingCount: payouts.filter((payout) => payout.status === "pending").length,
+        pendingGross: sumPayoutField("pending", "grossAmount"),
+        processingCount: payouts.filter((payout) => payout.status === "processing").length,
+        processingGross: sumPayoutField("processing", "grossAmount"),
+        paidCount: payouts.filter((payout) => payout.status === "paid").length,
+        paidNet: sumPayoutField("paid", "amount"),
+        rejectedCount: payouts.filter((payout) => payout.status === "rejected").length,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -113,6 +201,26 @@ export const getManagedProducts = async (_req: AuthRequest, res: Response) => {
       .populate("seller", "name email")
       .sort({ createdAt: -1 });
     res.json(products);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getAdminOrders = async (_req: AuthRequest, res: Response) => {
+  try {
+    const orders = await Order.find()
+      .populate("buyer", "name email")
+      .sort({ createdAt: -1 })
+      .limit(200);
+    const payments = await Payment.find({ order: { $in: orders.map((order) => order._id) } })
+      .select("order status provider providerStatus providerMessage amount");
+    const paymentByOrder = new Map(payments.map((payment) => [payment.order.toString(), payment]));
+
+    res.json(orders.map((order) => ({
+      ...order.toObject(),
+      payment: paymentByOrder.get(order._id.toString()) ?? null,
+    })));
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });

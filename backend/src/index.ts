@@ -14,6 +14,7 @@ import verificationRoutes from "./routes/verificationRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import { expirePendingPayments } from "./services/paymentExpiry";
 import paystackRoutes from "./routes/paystackRoutes";
+import User from "./models/User";
 
 dotenv.config();
 
@@ -26,7 +27,16 @@ app.use(express.json({
     (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
   },
 }));
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+const publicUploads = express.static(path.join(__dirname, "../uploads"));
+app.use("/uploads", (req, res, next) => {
+  const storedPath = `/uploads${req.path}`;
+  void User.exists({ businessDocuments: storedPath })
+    .then((isVerificationDocument) => {
+      if (isVerificationDocument) return res.sendStatus(404);
+      return publicUploads(req, res, next);
+    })
+    .catch(next);
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
